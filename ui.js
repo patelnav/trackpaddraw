@@ -141,7 +141,7 @@
   // ---- Engine events -------------------------------------------------------
   engine.on("pressure", function (p) {
     lastPressure = p;
-    meterFill.style.width = Math.round(p * 100) + "%";
+    meterFill.style.transform = "scaleX(" + p.toFixed(3) + ")";
     cursor.classList.toggle("is-pressing", p >= THRESHOLD);
     if (document.body.classList.contains("is-drawing")) updateCursorSize();
   });

@@ -54,7 +54,7 @@ body.is-fallback .cursor { display: none; }
   pointer-events: none;
   transform: translate(-50%, -50%);
   opacity: 0;
-  transition: opacity 120ms ease, width 80ms ease, height 80ms ease;
+  transition: opacity 120ms ease;
   mix-blend-mode: multiply;
 }
 .cursor.is-visible { opacity: 0.55; }
@@ -282,10 +282,12 @@ body.is-drawing .brand { opacity: 0.35; }
   left: 0;
   top: 0;
   bottom: 0;
-  width: 0%;
+  width: 100%;
   border-radius: 3px;
   background: var(--meter);
-  transition: width 40ms linear;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 40ms linear;
 }
 .meter-tick {
   position: absolute;
