@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Touch Draw</title>
+  <meta name="description" content="Draw with your MacBook's Force Touch trackpad. Pressure controls size or opacity. Safari only." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <canvas id="canvas" aria-label="Drawing canvas"></canvas>
+  <div id="cursor" class="cursor" aria-hidden="true"></div>
+
+  <header class="brand" aria-hidden="true">
+    <span class="brand-mark"></span>
+    <span class="brand-name">Touch Draw</span>
+  </header>
+
+  <p id="hint" class="hint">Press the trackpad to draw. Press harder for more.</p>
+
+  <nav class="toolbar" aria-label="Drawing tools">
+    <div class="group group-mode">
+      <span class="label">Pressure</span>
+      <div class="segmented" role="radiogroup" aria-label="Pressure mode">
+        <button class="seg" data-mode="size" role="radio" aria-checked="true" title="Press harder for a thicker line (1)">Size</button>
+        <button class="seg" data-mode="opacity" role="radio" aria-checked="false" title="Press harder for a darker line (2)">Opacity</button>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="group group-color">
+      <div class="swatches" role="radiogroup" aria-label="Color">
+        <button class="swatch is-active" data-color="#1a1a1a" style="--c:#1a1a1a" role="radio" aria-checked="true" aria-label="Ink"></button>
+        <button class="swatch" data-color="#c8321e" style="--c:#c8321e" role="radio" aria-checked="false" aria-label="Red"></button>
+        <button class="swatch" data-color="#e28f16" style="--c:#e28f16" role="radio" aria-checked="false" aria-label="Amber"></button>
+        <button class="swatch" data-color="#2f7d4a" style="--c:#2f7d4a" role="radio" aria-checked="false" aria-label="Green"></button>
+        <button class="swatch" data-color="#2457b8" style="--c:#2457b8" role="radio" aria-checked="false" aria-label="Blue"></button>
+        <button class="swatch" data-color="#7a3fb5" style="--c:#7a3fb5" role="radio" aria-checked="false" aria-label="Violet"></button>
+        <label class="swatch swatch-custom" title="Custom color" aria-label="Custom color">
+          <input id="colorInput" type="color" value="#1a1a1a" />
+        </label>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="group group-slider" id="sizeGroup">
+      <label class="label" for="sizeInput"><span class="label-text">Size</span><span class="label-max">max</span></label>
+      <input id="sizeInput" type="range" min="2" max="120" step="1" value="24" aria-label="Brush size" />
+      <output id="sizeOut" for="sizeInput">24</output>
+    </div>
+
+    <div class="group group-slider" id="opacityGroup">
+      <label class="label" for="opacityInput"><span class="label-text">Opacity</span><span class="label-max">max</span></label>
+      <input id="opacityInput" type="range" min="5" max="100" step="1" value="100" aria-label="Opacity" />
+      <output id="opacityOut" for="opacityInput">100</output>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="group group-meter" title="Live trackpad pressure. The tick is the start threshold.">
+      <span class="label">Force</span>
+      <div class="meter" id="meter">
+        <div class="meter-fill" id="meterFill"></div>
+        <div class="meter-tick" id="meterTick"></div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="group group-actions">
+      <button class="btn" id="undoBtn" title="Undo (⌘Z)" disabled>Undo</button>
+      <button class="btn" id="clearBtn" title="Clear canvas">Clear</button>
+      <button class="btn btn-primary" id="saveBtn" title="Download PNG (⌘S)">Save</button>
+    </div>
+  </nav>
+
+  <div id="gate" class="gate" hidden>
+    <div class="gate-card">
+      <div class="gate-glyph" aria-hidden="true"></div>
+      <h1>Open this in Safari</h1>
+      <p>Trackpad pressure reaches the web only through Safari's Force Touch events. Chrome, Firefox and Edge report a flat click with no pressure.</p>
+      <div class="gate-actions">
+        <button class="btn btn-primary" id="copyLinkBtn">Copy link</button>
+        <button class="btn btn-ghost" id="continueBtn">Continue without pressure</button>
+      </div>
+      <p class="gate-fine" id="copyStatus"></p>
+    </div>
+  </div>
+
+  <script src="engine.js"></script>
+  <script src="ui.js"></script>
+</body>
+</html>
