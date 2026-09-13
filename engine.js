@@ -348,10 +348,13 @@
       if (!hasForce) return gesture || (e.buttons & 1) ||
         (e.type === "mousedown" && e.button === 0) ? 0.5 : 0;
       var force = e.webkitForce;
-      // Safari: plain click = 1 (WEBKIT_FORCE_AT_MOUSE_DOWN), force click = 2,
-      // hard press ~3. Map 0.5..3 onto 0..1 so a plain click draws thin (0.2)
-      // and a hard press reaches full size/opacity.
-      return typeof force === "number" && isFinite(force) ? clamp((force - 0.5) / 2.5, 0, 1) : 0;
+      // Safari: plain click = 1 (WEBKIT_FORCE_AT_MOUSE_DOWN), force click = 2.
+      // Most presses stay between 1 and 2, so that span is the whole range:
+      // plain click ~0.15, force click = 1. The 0.6 exponent makes light
+      // extra pressure respond quickly instead of needing a hard push.
+      if (typeof force !== "number" || !isFinite(force)) return 0;
+      var linear = clamp((force - 0.85) / 1.15, 0, 1);
+      return Math.pow(linear, 0.6);
     }
     function sample(e, p) {
       if (!gesture) return;
