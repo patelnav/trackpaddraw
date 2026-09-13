@@ -22,22 +22,24 @@
     return result;
   }
 
+  function flattenCurve(a, c, b, spacing, emitPoint, depth) {
+    var ac = mix(a, c, 0.5), cb = mix(c, b, 0.5), mid = mix(ac, cb, 0.5);
+    if (depth < 12 && (distance(a, b) > spacing * 4 ||
+        distance(mid, mix(a, b, 0.5)) > 0.15)) {
+      flattenCurve(a, ac, mid, spacing, emitPoint, depth + 1);
+      flattenCurve(mid, cb, b, spacing, emitPoint, depth + 1);
+    } else { emitPoint(b); }
+  }
+
   // Flatten midpoint quadratics, then resample by arc length. Pressure follows
   // the same quadratic and interpolation as position, including stationary input.
   function smooth(samples, spacing) {
     if (samples.length < 2) return samples.slice();
     var flat = [samples[0]], start = samples[0], i;
-    function curve(a, c, b, depth) {
-      var ac = mix(a, c, 0.5), cb = mix(c, b, 0.5), mid = mix(ac, cb, 0.5);
-      if (depth < 12 && (distance(a, b) > spacing * 4 ||
-          distance(mid, mix(a, b, 0.5)) > 0.15)) {
-        curve(a, ac, mid, depth + 1);
-        curve(mid, cb, b, depth + 1);
-      } else { flat.push(b); }
-    }
+
     for (i = 1; i < samples.length; i++) {
       var end = i === samples.length - 1 ? samples[i] : mix(samples[i], samples[i + 1], 0.5);
-      curve(start, samples[i], end, 0);
+      flattenCurve(start, samples[i], end, spacing, function (point) { flat.push(point); }, 0);
       start = end;
     }
     var out = [flat[0]], remaining = spacing;
@@ -81,6 +83,7 @@
     var gesture = null, path = null, ema = null, lastTime = 0;
     var dpr = 1, frame = null, destroyed = false, baseDirty = true;
     var hasForce = supportsForce(), renderedCount = 0;
+    var gestureMask = null, pendingMasks = [];
 
     function emit(name, value) {
       var callbacks = (listeners[name] || []).slice();
@@ -100,6 +103,38 @@
     // Each tapered segment is the envelope of interpolated circles. Coverage
     // is MAX, never source-over: crossings and repeated samples cannot darken
     // either mode. Pixel-edge coverage supplies antialiasing at the current DPR.
+    function envelope(mask, style, a, b) {
+      var left = mask.left, top = mask.top, w = mask.width;
+      var right = left + w, bottom = top + mask.height, coverage = mask.coverage;
+      var dx = b.x - a.x, dy = b.y - a.y, len2 = dx * dx + dy * dy;
+      var len = Math.sqrt(len2), dr = b.r - a.r;
+      var x0 = Math.max(left, Math.floor(Math.min(a.x - a.r, b.x - b.r) - 1));
+      var y0 = Math.max(top, Math.floor(Math.min(a.y - a.r, b.y - b.r) - 1));
+      var x1 = Math.min(right, Math.ceil(Math.max(a.x + a.r, b.x + b.r) + 1));
+      var y1 = Math.min(bottom, Math.ceil(Math.max(a.y + a.r, b.y + b.r) + 1));
+      for (var y = y0; y < y1; y++) {
+        for (var x = x0; x < x1; x++) {
+          var index = (y - top) * w + x - left;
+          var ceiling = style.mode === "opacity" ? Math.round(255 * Math.max(a.p, b.p)) : 255;
+          if (coverage[index] >= ceiling) continue;
+          var px = x + 0.5 - a.x, py = y + 0.5 - a.y;
+          var t = 0;
+          if (len > 0.0001) {
+            var along = (px * dx + py * dy) / len;
+            var across = Math.abs(px * dy - py * dx) / len;
+            // Minimize distance to the center minus interpolated radius.
+            t = Math.abs(dr) < len ? clamp((along + dr * across /
+              Math.sqrt(len2 - dr * dr)) / len, 0, 1) : (dr > 0 ? 1 : 0);
+          } else if (b.r > a.r || b.p > a.p) { t = 1; }
+          var ex = px - dx * t, ey = py - dy * t;
+          var edge = clamp(a.r + dr * t + 0.5 - Math.sqrt(ex * ex + ey * ey), 0, 1);
+          var alpha = style.mode === "opacity" ? a.p + (b.p - a.p) * t : 1;
+          var value = Math.round(255 * edge * alpha);
+          if (value > coverage[index]) coverage[index] = value;
+        }
+      }
+    }
+
     function renderStroke(target, stroke) {
       var style = stroke.style, paths = [], minX = Infinity, minY = Infinity;
       var maxX = -Infinity, maxY = -Infinity, i, j;
@@ -120,47 +155,31 @@
       var right = Math.min(canvas.width, Math.ceil(maxX)), bottom = Math.min(canvas.height, Math.ceil(maxY));
       var w = right - left, h = bottom - top;
       if (w <= 0 || h <= 0) return;
-      var coverage = new Uint8ClampedArray(w * h);
-      function envelope(a, b) {
-        var dx = b.x - a.x, dy = b.y - a.y, len2 = dx * dx + dy * dy;
-        var len = Math.sqrt(len2), dr = b.r - a.r;
-        var x0 = Math.max(left, Math.floor(Math.min(a.x - a.r, b.x - b.r) - 1));
-        var y0 = Math.max(top, Math.floor(Math.min(a.y - a.r, b.y - b.r) - 1));
-        var x1 = Math.min(right, Math.ceil(Math.max(a.x + a.r, b.x + b.r) + 1));
-        var y1 = Math.min(bottom, Math.ceil(Math.max(a.y + a.r, b.y + b.r) + 1));
-        for (var y = y0; y < y1; y++) {
-          for (var x = x0; x < x1; x++) {
-            var index = (y - top) * w + x - left;
-            var ceiling = style.mode === "opacity" ? Math.round(255 * Math.max(a.p, b.p)) : 255;
-            if (coverage[index] >= ceiling) continue;
-            var px = x + 0.5 - a.x, py = y + 0.5 - a.y;
-            var t = 0;
-            if (len > 0.0001) {
-              var along = (px * dx + py * dy) / len;
-              var across = Math.abs(px * dy - py * dx) / len;
-              // Minimize distance to the center minus interpolated radius.
-              t = Math.abs(dr) < len ? clamp((along + dr * across /
-                Math.sqrt(len2 - dr * dr)) / len, 0, 1) : (dr > 0 ? 1 : 0);
-            } else if (b.r > a.r || b.p > a.p) { t = 1; }
-            var ex = px - dx * t, ey = py - dy * t;
-            var edge = clamp(a.r + dr * t + 0.5 - Math.sqrt(ex * ex + ey * ey), 0, 1);
-            var alpha = style.mode === "opacity" ? a.p + (b.p - a.p) * t : 1;
-            var value = Math.round(255 * edge * alpha);
-            if (value > coverage[index]) coverage[index] = value;
-          }
-        }
-      }
+      var mask = { left: left, top: top, width: w, height: h,
+        box: { left: left, top: top, right: right, bottom: bottom },
+        coverage: new Uint8ClampedArray(w * h) };
+
       for (i = 0; i < paths.length; i++) {
         var line = paths[i];
         for (j = 0; j < line.length; j++) {
           // Endpoint circles also preserve the maximum at stationary presses.
-          envelope(line[j], line[j]);
-          if (j) envelope(line[j - 1], line[j]);
+          envelope(mask, style, line[j], line[j]);
+          if (j) envelope(mask, style, line[j - 1], line[j]);
         }
       }
+      composite(target, mask, style);
+    }
+    function composite(target, mask, style) {
+      var box = mask.box, left = box.left, top = box.top;
+      var w = box.right - left, h = box.bottom - top;
+      if (w <= 0 || h <= 0) return;
       live.width = w; live.height = h;
-      var pixels = liveCtx.createImageData(w, h);
-      for (i = 0; i < coverage.length; i++) pixels.data[i * 4 + 3] = coverage[i];
+      var pixels = liveCtx.createImageData(w, h), data = pixels.data;
+      for (var y = 0; y < h; y++) {
+        var source = (top + y - mask.top) * mask.width + left - mask.left;
+        var dest = y * w * 4 + 3;
+        for (var x = 0; x < w; x++, dest += 4) data[dest] = mask.coverage[source + x];
+      }
       liveCtx.putImageData(pixels, 0, 0);
       liveCtx.globalCompositeOperation = "source-in";
       liveCtx.fillStyle = style.color;
@@ -171,6 +190,114 @@
       target.drawImage(live, left, top);
       target.restore();
     }
+
+    function newGestureMask() {
+      return { left: 0, top: 0, width: canvas.width, height: canvas.height,
+        coverage: new Uint8ClampedArray(canvas.width * canvas.height),
+        box: { left: canvas.width, top: canvas.height, right: 0, bottom: 0 },
+        pathIndex: 0, state: null, tail: null };
+    }
+    function devicePoint(point, style) {
+      return { x: point.x * dpr, y: point.y * dpr, p: point.p,
+        r: Math.max(0.35, style.size * (style.mode === "size" ? point.p : 1) / 2) * dpr };
+    }
+    function expand(box, point) {
+      box.left = Math.max(0, Math.min(box.left, Math.floor(point.x - point.r - 1)));
+      box.top = Math.max(0, Math.min(box.top, Math.floor(point.y - point.r - 1)));
+      box.right = Math.min(canvas.width, Math.max(box.right, Math.ceil(point.x + point.r + 1)));
+      box.bottom = Math.min(canvas.height, Math.max(box.bottom, Math.ceil(point.y + point.r + 1)));
+    }
+    function rasterPoint(mask, style, state, point) {
+      var next = devicePoint(point, style);
+      expand(mask.box, next);
+      envelope(mask, style, next, next);
+      if (state.last) envelope(mask, style, state.last, next);
+      state.last = next;
+    }
+    // This is smooth()'s resampler with its arc-length remainder retained across
+    // frames. next is the first raw control point not yet finalized; last is the
+    // last rasterized resampled point. Neither stored samples nor prefixes move.
+    function resampleFlat(state, b, spacing, emitPoint) {
+      var a = state.flat, len = distance(a, b);
+      if (len < 0.0001) {
+        emitPoint(b);
+      } else {
+        while (len >= state.remaining) {
+          a = mix(a, b, state.remaining / len);
+          emitPoint(a);
+          len = distance(a, b);
+          state.remaining = spacing;
+        }
+        state.remaining -= len;
+      }
+      state.flat = b;
+    }
+    function restoreTail(mask) {
+      var tail = mask.tail;
+      if (!tail) return;
+      for (var y = 0; y < tail.height; y++) {
+        mask.coverage.set(tail.pixels.subarray(y * tail.width, (y + 1) * tail.width),
+          (tail.top + y) * mask.width + tail.left);
+      }
+      mask.tail = null;
+    }
+    function saveTail(mask, points, last, style) {
+      var box = { left: canvas.width, top: canvas.height, right: 0, bottom: 0 };
+      if (last) expand(box, last);
+      for (var i = 0; i < points.length; i++) expand(box, devicePoint(points[i], style));
+      var w = box.right - box.left, h = box.bottom - box.top;
+      if (w <= 0 || h <= 0) return;
+      var pixels = new Uint8ClampedArray(w * h);
+      for (var y = 0; y < h; y++) {
+        var offset = (box.top + y) * mask.width + box.left;
+        pixels.set(mask.coverage.subarray(offset, offset + w), y * w);
+      }
+      mask.tail = { left: box.left, top: box.top, width: w, height: h, pixels: pixels };
+    }
+    function updateGestureMask(mask, stroke) {
+      var style = stroke.style, spacing = Math.max(0.25, Math.min(1, style.size / 8));
+      restoreTail(mask);
+      while (mask.pathIndex < stroke.paths.length) {
+        var samples = stroke.paths[mask.pathIndex], n = samples.length;
+        if (!n) { mask.pathIndex++; continue; }
+        var state = mask.state;
+        if (!state) {
+          state = mask.state = { next: 1, flat: samples[0], remaining: spacing, last: null };
+          rasterPoint(mask, style, state, samples[0]);
+        }
+        var emitStable = function (point) { rasterPoint(mask, style, state, point); };
+        var feedStable = function (point) { resampleFlat(state, point, spacing, emitStable); };
+        var limit = samples.closed ? n : n - 1;
+        for (; state.next < limit; state.next++) {
+          var i = state.next;
+          var start = i === 1 ? samples[0] : mix(samples[i - 1], samples[i], 0.5);
+          var end = i === n - 1 ? samples[i] : mix(samples[i], samples[i + 1], 0.5);
+          flattenCurve(start, samples[i], end, spacing, feedStable, 0);
+        }
+        if (samples.closed) {
+          if (n > 1) emitStable(samples[n - 1]);
+          mask.pathIndex++;
+          mask.state = null;
+          continue;
+        }
+        if (n > 1) {
+          // The last quadratic changes when another sample arrives. Temporarily
+          // rasterize it over a saved rectangle, then restore before appending
+          // stable coverage next frame. This avoids permanent tail artifacts.
+          var preview = { flat: state.flat, remaining: state.remaining, last: state.last };
+          var points = [];
+          var emitPreview = function (point) { points.push(point); };
+          var feedPreview = function (point) { resampleFlat(preview, point, spacing, emitPreview); };
+          var tailStart = n === 2 ? samples[0] : mix(samples[n - 2], samples[n - 1], 0.5);
+          flattenCurve(tailStart, samples[n - 1], samples[n - 1], spacing, feedPreview, 0);
+          points.push(samples[n - 1]);
+          saveTail(mask, points, state.last, style);
+          for (var j = 0; j < points.length; j++) rasterPoint(mask, style, preview, points[j]);
+        }
+        break;
+      }
+    }
+
     function render() {
       if (destroyed) return;
       if (baseDirty) {
@@ -181,11 +308,24 @@
         baseDirty = false;
       }
       for (; renderedCount < strokes.length; renderedCount++) {
-        renderStroke(baseCtx, strokes[renderedCount]);
+        var stroke = strokes[renderedCount], cached = null;
+        for (var i = 0; i < pendingMasks.length; i++) {
+          if (pendingMasks[i].stroke === stroke) {
+            cached = pendingMasks.splice(i, 1)[0].mask;
+            break;
+          }
+        }
+        if (cached) {
+          updateGestureMask(cached, stroke);
+          composite(baseCtx, cached, stroke.style);
+        } else { renderStroke(baseCtx, stroke); }
       }
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(base, 0, 0);
-      if (gesture) renderStroke(ctx, gesture);
+      if (gesture) {
+        updateGestureMask(gestureMask, gesture);
+        composite(ctx, gestureMask, gesture.style);
+      }
     }
     function flush() {
       if (frame !== null) { window.cancelAnimationFrame(frame); frame = null; }
@@ -199,6 +339,8 @@
       canvas.style.width = window.innerWidth + "px";
       canvas.style.height = window.innerHeight + "px";
       base.width = canvas.width; base.height = canvas.height;
+      pendingMasks = [];
+      if (gesture) gestureMask = newGestureMask();
       baseDirty = true;
       schedule();
     }
@@ -211,7 +353,9 @@
     function sample(e, p) {
       if (!gesture) return;
       var threshold = gesture.style.threshold;
-      if (path && p <= threshold * 0.6) { path = null; ema = null; return; }
+      if (path && p <= threshold * 0.6) {
+        path.closed = true; path = null; ema = null; schedule(); return;
+      }
       if (!path) {
         if (p <= 0 || p < threshold) return;
         path = [];
@@ -233,6 +377,9 @@
       emit("pressure", 0);
       if (!gesture) return;
       var ended = gesture;
+      if (path) path.closed = true;
+      if (ended.paths.length) pendingMasks.push({ stroke: ended, mask: gestureMask });
+      gestureMask = null;
       gesture = null; path = null; ema = null;
       if (ended.paths.length) {
         strokes.push(ended);
@@ -248,6 +395,7 @@
       e.preventDefault();
       if (gesture) finish();
       gesture = { style: copy(opts), paths: [] };
+      gestureMask = newGestureMask();
       emit("strokestart");
       sample(e, pressureOf(e));
     }
@@ -286,6 +434,7 @@
         if (gesture) finish();
         history.push({ type: "clear", strokes: strokes });
         strokes = [];
+        pendingMasks = [];
         baseDirty = true; schedule(); emit("change");
       },
       undo: function () {
@@ -295,6 +444,7 @@
         if (!entry) return false;
         if (entry.type === "clear") strokes = entry.strokes;
         else strokes.pop();
+        pendingMasks = [];
         baseDirty = true; schedule(); emit("change");
         return true;
       },
@@ -319,6 +469,7 @@
           bindings[i][0].removeEventListener(bindings[i][1], bindings[i][2], false);
         }
         bindings = []; listeners = {}; strokes = []; history = [];
+        gestureMask = null; pendingMasks = [];
         base.width = base.height = live.width = live.height = 1;
       }
     };
