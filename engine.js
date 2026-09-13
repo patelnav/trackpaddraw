@@ -348,7 +348,10 @@
       if (!hasForce) return gesture || (e.buttons & 1) ||
         (e.type === "mousedown" && e.button === 0) ? 0.5 : 0;
       var force = e.webkitForce;
-      return typeof force === "number" && isFinite(force) ? clamp(force / 3, 0, 1) : 0;
+      // Safari: plain click = 1 (WEBKIT_FORCE_AT_MOUSE_DOWN), force click = 2,
+      // hard press ~3. Map 0.5..3 onto 0..1 so a plain click draws thin (0.2)
+      // and a hard press reaches full size/opacity.
+      return typeof force === "number" && isFinite(force) ? clamp((force - 0.5) / 2.5, 0, 1) : 0;
     }
     function sample(e, p) {
       if (!gesture) return;

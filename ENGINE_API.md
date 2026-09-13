@@ -33,7 +33,7 @@ engine.destroy()
 ```
 
 Events (`engine.on`):
-- `'pressure'` → `(p)` normalized 0..1 pressure, fired on every force change (also 0 on release). UI uses this for the live meter.
+- `'pressure'` → `(p)` normalized 0..1 pressure (webkitForce mapped as (force - 0.5) / 2.5, so a plain click ≈ 0.2 and a hard press ≈ 1), fired on every force change (also 0 on release). UI uses this for the live meter.
 - `'strokestart'` → `()`
 - `'strokeend'` → `()`
 - `'change'` → `()` after clear/undo/strokeend so UI can refresh button states.
