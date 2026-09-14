@@ -371,7 +371,7 @@ body.is-drawing .brand { opacity: 0.35; }
   border-radius: 50%;
   background: var(--ink);
 }
-.gate h1 {
+.gate h2 {
   margin: 0 0 10px;
   font-size: 22px;
   font-weight: 600;
