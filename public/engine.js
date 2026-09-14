@@ -3,6 +3,20 @@
 (function () {
   "use strict";
 
+  // Session hue advances only when a rainbow gesture ends, never on replay.
+  var rainbowHue = 0, rainbowRGB = [];
+  for (var hue = 0; hue < 360; hue++) {
+    var chroma = (1 - Math.abs(2 * 0.55 - 1)) * 0.85;
+    var secondary = chroma * (1 - Math.abs((hue / 60) % 2 - 1));
+    var offset = 0.55 - chroma / 2;
+    var rgb = hue < 60 ? [chroma, secondary, 0] :
+      hue < 120 ? [secondary, chroma, 0] : hue < 180 ? [0, chroma, secondary] :
+      hue < 240 ? [0, secondary, chroma] : hue < 300 ? [secondary, 0, chroma] :
+      [chroma, 0, secondary];
+    rainbowRGB.push([Math.round((rgb[0] + offset) * 255),
+      Math.round((rgb[1] + offset) * 255), Math.round((rgb[2] + offset) * 255)]);
+  }
+
   function supportsForce() {
     return typeof window.MouseEvent !== "undefined" &&
       "webkitForce" in window.MouseEvent.prototype;
@@ -130,20 +144,31 @@
           var edge = clamp(a.r + dr * t + 0.5 - Math.sqrt(ex * ex + ey * ey), 0, 1);
           var alpha = style.mode === "opacity" ? a.p + (b.p - a.p) * t : 1;
           var value = Math.round(255 * edge * alpha);
-          if (value > coverage[index]) coverage[index] = value;
+          if (value > coverage[index]) {
+            coverage[index] = value;
+            // Point hues stay unwrapped so interpolation crosses 360 correctly.
+            if (mask.hues) mask.hues[index] = Math.round((a.hue + (b.hue - a.hue) * t) % 360) % 360;
+          }
         }
       }
     }
 
     function renderStroke(target, stroke) {
       var style = stroke.style, paths = [], minX = Infinity, minY = Infinity;
-      var maxX = -Infinity, maxY = -Infinity, i, j;
+      var maxX = -Infinity, maxY = -Infinity, i, j, travelled = 0;
       var spacing = Math.max(0.25, Math.min(1, style.size / 8));
       for (i = 0; i < stroke.paths.length; i++) {
         var points = smooth(stroke.paths[i], spacing);
         paths.push(points);
+        var previous = null;
         for (j = 0; j < points.length; j++) {
           var pt = points[j] = copy(points[j]);
+          if (style.color === "rainbow") {
+            if (previous) travelled += distance(previous, pt);
+            previous = copy(pt);
+            pt.distance = travelled;
+            pt.hue = style.hueStart + travelled * 0.6;
+          }
           pt.r = Math.max(0.35, style.size * (style.mode === "size" ? pt.p : 1) / 2) * dpr;
           pt.x *= dpr; pt.y *= dpr;
           minX = Math.min(minX, pt.x - pt.r - 1); minY = Math.min(minY, pt.y - pt.r - 1);
@@ -157,7 +182,8 @@
       if (w <= 0 || h <= 0) return;
       var mask = { left: left, top: top, width: w, height: h,
         box: { left: left, top: top, right: right, bottom: bottom },
-        coverage: new Uint8ClampedArray(w * h) };
+        coverage: new Uint8ClampedArray(w * h),
+        hues: style.color === "rainbow" ? new Uint16Array(w * h) : null };
 
       for (i = 0; i < paths.length; i++) {
         var line = paths[i];
@@ -178,13 +204,21 @@
       for (var y = 0; y < h; y++) {
         var source = (top + y - mask.top) * mask.width + left - mask.left;
         var dest = y * w * 4 + 3;
-        for (var x = 0; x < w; x++, dest += 4) data[dest] = mask.coverage[source + x];
+        for (var x = 0; x < w; x++, dest += 4) {
+          data[dest] = mask.coverage[source + x];
+          if (mask.hues) {
+            var rgb = rainbowRGB[mask.hues[source + x]];
+            data[dest - 3] = rgb[0]; data[dest - 2] = rgb[1]; data[dest - 1] = rgb[2];
+          }
+        }
       }
       liveCtx.putImageData(pixels, 0, 0);
-      liveCtx.globalCompositeOperation = "source-in";
-      liveCtx.fillStyle = style.color;
-      liveCtx.fillRect(0, 0, w, h);
-      liveCtx.globalCompositeOperation = "source-over";
+      if (style.color !== "rainbow") {
+        liveCtx.globalCompositeOperation = "source-in";
+        liveCtx.fillStyle = style.color;
+        liveCtx.fillRect(0, 0, w, h);
+        liveCtx.globalCompositeOperation = "source-over";
+      }
       target.save();
       target.globalAlpha = style.opacity;
       target.drawImage(live, left, top);
@@ -194,6 +228,8 @@
     function newGestureMask() {
       return { left: 0, top: 0, width: canvas.width, height: canvas.height,
         coverage: new Uint8ClampedArray(canvas.width * canvas.height),
+        hues: gesture.style.color === "rainbow" ? new Uint16Array(canvas.width * canvas.height) : null,
+        distance: 0,
         box: { left: canvas.width, top: canvas.height, right: 0, bottom: 0 },
         pathIndex: 0, state: null, tail: null };
     }
@@ -209,6 +245,12 @@
     }
     function rasterPoint(mask, style, state, point) {
       var next = devicePoint(point, style);
+      if (mask.hues) {
+        if (state.point) state.distance += distance(state.point, point);
+        state.point = point;
+        next.distance = state.distance;
+        next.hue = style.hueStart + state.distance * 0.6;
+      }
       expand(mask.box, next);
       envelope(mask, style, next, next);
       if (state.last) envelope(mask, style, state.last, next);
@@ -238,6 +280,8 @@
       for (var y = 0; y < tail.height; y++) {
         mask.coverage.set(tail.pixels.subarray(y * tail.width, (y + 1) * tail.width),
           (tail.top + y) * mask.width + tail.left);
+        if (mask.hues) mask.hues.set(tail.hues.subarray(y * tail.width, (y + 1) * tail.width),
+          (tail.top + y) * mask.width + tail.left);
       }
       mask.tail = null;
     }
@@ -248,11 +292,13 @@
       var w = box.right - box.left, h = box.bottom - box.top;
       if (w <= 0 || h <= 0) return;
       var pixels = new Uint8ClampedArray(w * h);
+      var hues = mask.hues ? new Uint16Array(w * h) : null;
       for (var y = 0; y < h; y++) {
         var offset = (box.top + y) * mask.width + box.left;
         pixels.set(mask.coverage.subarray(offset, offset + w), y * w);
+        if (hues) hues.set(mask.hues.subarray(offset, offset + w), y * w);
       }
-      mask.tail = { left: box.left, top: box.top, width: w, height: h, pixels: pixels };
+      mask.tail = { left: box.left, top: box.top, width: w, height: h, pixels: pixels, hues: hues };
     }
     function updateGestureMask(mask, stroke) {
       var style = stroke.style, spacing = Math.max(0.25, Math.min(1, style.size / 8));
@@ -262,7 +308,8 @@
         if (!n) { mask.pathIndex++; continue; }
         var state = mask.state;
         if (!state) {
-          state = mask.state = { next: 1, flat: samples[0], remaining: spacing, last: null };
+          state = mask.state = { next: 1, flat: samples[0], remaining: spacing, last: null,
+            point: null, distance: mask.distance };
           rasterPoint(mask, style, state, samples[0]);
         }
         var emitStable = function (point) { rasterPoint(mask, style, state, point); };
@@ -276,6 +323,7 @@
         }
         if (samples.closed) {
           if (n > 1) emitStable(samples[n - 1]);
+          mask.distance = state.distance;
           mask.pathIndex++;
           mask.state = null;
           continue;
@@ -284,7 +332,8 @@
           // The last quadratic changes when another sample arrives. Temporarily
           // rasterize it over a saved rectangle, then restore before appending
           // stable coverage next frame. This avoids permanent tail artifacts.
-          var preview = { flat: state.flat, remaining: state.remaining, last: state.last };
+          var preview = { flat: state.flat, remaining: state.remaining, last: state.last,
+            point: state.point, distance: state.distance };
           var points = [];
           var emitPreview = function (point) { points.push(point); };
           var feedPreview = function (point) { resampleFlat(preview, point, spacing, emitPreview); };
@@ -384,6 +433,15 @@
       if (!gesture) return;
       var ended = gesture;
       if (path) path.closed = true;
+      if (ended.style.color === "rainbow") {
+        // Account for input not yet rendered, without forcing raster work here.
+        var travelled = 0, spacing = Math.max(0.25, Math.min(1, ended.style.size / 8));
+        for (var i = 0; i < ended.paths.length; i++) {
+          var points = smooth(ended.paths[i], spacing);
+          for (var j = 1; j < points.length; j++) travelled += distance(points[j - 1], points[j]);
+        }
+        rainbowHue = (ended.style.hueStart + travelled * 0.6) % 360;
+      }
       if (ended.paths.length) pendingMasks.push({ stroke: ended, mask: gestureMask });
       gestureMask = null;
       gesture = null; path = null; ema = null;
@@ -401,6 +459,7 @@
       e.preventDefault();
       if (gesture) finish();
       gesture = { style: copy(opts), paths: [] };
+      if (gesture.style.color === "rainbow") gesture.style.hueStart = rainbowHue;
       gestureMask = newGestureMask();
       emit("strokestart");
       sample(e, pressureOf(e));

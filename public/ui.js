@@ -21,14 +21,14 @@
   var clearBtn = $("clearBtn");
   var saveBtn = $("saveBtn");
 
-  var STORAGE_KEY = "trackpad-draw.settings";
+  var STORAGE_KEY = "trackpad-draw.settings.v2";
   var THRESHOLD = 0.12;
 
   var settings = load({
     mode: "size",
-    color: "#1a1a1a",
+    color: "rainbow",
     size: 24,
-    opacity: 1,
+    opacity: 0.7,
   });
 
   var engine = TouchDrawEngine.create(canvas, {
@@ -84,7 +84,7 @@
   function setColor(color, fromCustom) {
     settings.color = color;
     engine.set({ color: color });
-    cursor.style.borderColor = color;
+    cursor.style.borderColor = color === "rainbow" ? "" : color;
     var matched = false;
     for (var i = 0; i < swatches.length; i++) {
       var on = !fromCustom && swatches[i].dataset.color.toLowerCase() === color.toLowerCase();
@@ -95,7 +95,7 @@
     customSwatch.classList.toggle("is-active", !matched);
     customSwatch.classList.toggle("has-custom", !matched);
     if (!matched) customSwatch.style.setProperty("--c", color);
-    colorInput.value = color;
+    if (color !== "rainbow") colorInput.value = color;
     save();
   }
   for (var j = 0; j < swatches.length; j++) {
@@ -179,6 +179,18 @@
     });
   }
 
+  // ---- Help ----------------------------------------------------------------
+  var help = $("help");
+  var helpBtn = $("helpBtn");
+  function toggleHelp(force) {
+    var show = typeof force === "boolean" ? force : help.hidden;
+    help.hidden = !show;
+    helpBtn.setAttribute("aria-expanded", show ? "true" : "false");
+  }
+  helpBtn.addEventListener("click", function () { toggleHelp(); });
+  $("helpClose").addEventListener("click", function () { toggleHelp(false); });
+  help.addEventListener("click", function (e) { if (e.target === help) toggleHelp(false); });
+
   // ---- Keyboard ------------------------------------------------------------
   document.addEventListener("keydown", function (e) {
     var meta = e.metaKey || e.ctrlKey;
@@ -187,6 +199,8 @@
     if (meta && e.key.toLowerCase() === "z" && !e.shiftKey) { e.preventDefault(); engine.undo(); refreshButtons(); return; }
     if (meta && e.key.toLowerCase() === "s") { e.preventDefault(); savePNG(); return; }
     if (meta) return;
+    if (e.key === "Escape" && !help.hidden) { toggleHelp(false); e.preventDefault(); return; }
+    if (e.key === "?") { toggleHelp(); e.preventDefault(); return; }
     switch (e.key) {
       case "1": setMode("size"); break;
       case "2": setMode("opacity"); break;

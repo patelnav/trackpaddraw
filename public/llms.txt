@@ -1,0 +1,10 @@
+# Trackpad Draw
+
+> Free web app that turns a MacBook trackpad into a pressure-sensitive drawing pad. Runs in Safari, no install, nothing uploaded.
+
+- URL: https://trackpaddraw.com/
+- What it does: draw on a full-screen canvas with the trackpad. Pressing harder makes the line thicker (Size mode) or darker (Opacity mode). Rainbow pencil, color swatches, custom color, undo, clear, PNG export.
+- Requirements: a Mac with a Force Touch trackpad (MacBooks since 2015, Magic Trackpad 2 or newer) and Safari. Chrome, Firefox and Edge can draw but receive no pressure, because only Safari exposes trackpad force to web pages.
+- Privacy: everything runs locally in the browser. No account, no upload, no analytics on drawings.
+- Source: https://github.com/patelnav/trackpaddraw
+- Related native apps: Inklet (maps trackpad to screen for any app), Magic (Mac App Store drawing app).

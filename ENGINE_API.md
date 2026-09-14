@@ -10,7 +10,7 @@ window.TouchDrawEngine.create(canvas, options) -> engine
 ```js
 {
   mode: 'size',          // 'size' | 'opacity'  — which property pressure drives
-  color: '#1a1a1a',
+  color: '#1a1a1a',    // hex, or the string 'rainbow': hue advances 0.6° per CSS px of travel, hsl(h 85% 55%), continuing across strokes
   size: 24,              // px at DPR 1. In 'size' mode = max width; in 'opacity' mode = fixed width
   opacity: 1,            // 0..1. In 'opacity' mode = max alpha; in 'size' mode = fixed alpha
   threshold: 0.12,       // normalized pressure (0..1) needed to start a stroke

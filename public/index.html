@@ -10,7 +10,71 @@
   <meta property="og:description" content="Turn your MacBook trackpad into a pressure-sensitive drawing pad. Free, online, no install." />
   <meta property="og:url" content="https://trackpaddraw.com/" />
   <meta property="og:type" content="website" />
-  <meta name="twitter:card" content="summary" />
+  <meta property="og:image" content="https://trackpaddraw.com/og.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Trackpad Draw" />
+  <meta name="twitter:description" content="Turn your MacBook trackpad into a pressure-sensitive drawing pad. Free, online, no install." />
+  <meta name="twitter:image" content="https://trackpaddraw.com/og.png" />
+  <meta name="robots" content="index, follow, max-image-preview:large" />
+  <meta name="theme-color" content="#f7f4ee" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebApplication",
+        "@id": "https://trackpaddraw.com/#app",
+        "name": "Trackpad Draw",
+        "url": "https://trackpaddraw.com/",
+        "description": "Draw on your MacBook trackpad online. Press harder for thicker or darker lines using the trackpad's pressure sensitivity. Free, no install, nothing uploaded.",
+        "applicationCategory": "DesignApplication",
+        "operatingSystem": "macOS",
+        "browserRequirements": "Requires Safari on a Mac with a Force Touch trackpad for pressure. Other browsers draw without pressure.",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+        "featureList": [
+          "Pressure-sensitive drawing with the MacBook trackpad",
+          "Pressure controls line thickness or opacity",
+          "Rainbow pencil and custom colors",
+          "Undo, clear, and PNG export",
+          "Runs in the browser, nothing is uploaded"
+        ]
+      },
+      {
+        "@type": "FAQPage",
+        "@id": "https://trackpaddraw.com/#faq",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Can you draw with a MacBook trackpad?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Yes. Open trackpaddraw.com in Safari, press the trackpad with one finger, and move. Press harder for a thicker or darker line. MacBooks since 2015 and the Magic Trackpad 2 and later have pressure-sensitive Force Touch trackpads." }
+          },
+          {
+            "@type": "Question",
+            "name": "Why does Trackpad Draw only work with pressure in Safari?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Safari is the only browser that passes trackpad pressure to web pages, through Apple's Force Touch events. Chrome, Firefox, and Edge report a plain click with no pressure, so in those browsers you can still draw, but every line has the same weight." }
+          },
+          {
+            "@type": "Question",
+            "name": "Does it work with the Apple Magic Trackpad?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Yes. The Magic Trackpad 2 and newer have Force Touch, so pressure works in Safari on any Mac." }
+          },
+          {
+            "@type": "Question",
+            "name": "Is Trackpad Draw free, and where do my drawings go?",
+            "acceptedAnswer": { "@type": "Answer", "text": "It is free with no account. Everything runs in your browser. Nothing is uploaded. Save downloads a PNG to your Mac." }
+          },
+          {
+            "@type": "Question",
+            "name": "How do I use a MacBook trackpad as a drawing tablet?",
+            "acceptedAnswer": { "@type": "Answer", "text": "For quick sketches, use Trackpad Draw in Safari, which turns the trackpad into a pressure-sensitive pad with no install. For drawing inside apps like Photoshop, a native tool such as Inklet maps the trackpad to the screen." }
+          }
+        ]
+      }
+    ]
+  }
+  </script>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23f7f4ee'/%3E%3Ccircle cx='32' cy='32' r='16' fill='%231a1a1a'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -30,6 +94,49 @@
 
   <p id="hint" class="hint">Press the trackpad to draw. Press harder for more.</p>
 
+  <button id="helpBtn" class="help-btn" aria-expanded="false" aria-controls="help" title="About Trackpad Draw (?)">?</button>
+
+  <aside id="help" class="help" hidden>
+    <div class="help-inner">
+      <button id="helpClose" class="help-close" aria-label="Close">×</button>
+      <h2>Draw on your MacBook trackpad, online</h2>
+      <p>Trackpad Draw turns a MacBook trackpad into a pressure-sensitive drawing pad. Press with one finger to draw. Press harder for a thicker line, or switch modes and press harder for a darker line. It is free, runs in the browser, and uploads nothing.</p>
+
+      <h3>How to use it</h3>
+      <ol>
+        <li>Open trackpaddraw.com in Safari on a Mac.</li>
+        <li>Press the trackpad and move your finger. A light click draws a thin line.</li>
+        <li>Press harder while moving to make the line thicker or darker.</li>
+        <li>Pick a color, adjust Size and Opacity, then Save to download a PNG.</li>
+      </ol>
+
+      <h3>Frequently asked questions</h3>
+      <dl>
+        <dt>Can you draw with a MacBook trackpad?</dt>
+        <dd>Yes. Every MacBook since 2015 and the Magic Trackpad 2 and later have a pressure-sensitive Force Touch trackpad. Trackpad Draw reads that pressure in Safari.</dd>
+        <dt>Why does pressure only work in Safari?</dt>
+        <dd>Safari is the only browser that passes trackpad pressure to web pages. Chrome, Firefox, and Edge report a plain click, so they draw with a fixed line weight.</dd>
+        <dt>Does it work with the Apple Magic Trackpad?</dt>
+        <dd>Yes, the Magic Trackpad 2 and newer support Force Touch on any Mac.</dd>
+        <dt>Where do my drawings go?</dt>
+        <dd>Nowhere. Everything runs on your Mac. Save downloads a PNG.</dd>
+        <dt>Can I draw in Photoshop with the trackpad?</dt>
+        <dd>Not with this tool. Trackpad Draw is a standalone canvas. For drawing inside other apps, a native utility such as Inklet maps the trackpad to the screen.</dd>
+      </dl>
+
+      <h3>Keyboard shortcuts</h3>
+      <ul class="keys">
+        <li><kbd>⌘Z</kbd> Undo</li>
+        <li><kbd>⌘S</kbd> Save PNG</li>
+        <li><kbd>1</kbd> <kbd>2</kbd> Pressure controls size or opacity</li>
+        <li><kbd>[</kbd> <kbd>]</kbd> Brush size</li>
+        <li><kbd>-</kbd> <kbd>=</kbd> Opacity</li>
+        <li><kbd>?</kbd> This panel</li>
+      </ul>
+      <p class="help-fine">Made with a Force Touch trackpad. <a href="https://github.com/patelnav/trackpaddraw">Source on GitHub</a>.</p>
+    </div>
+  </aside>
+
   <nav class="toolbar" aria-label="Drawing tools">
     <div class="group group-mode">
       <span class="label">Pressure</span>
@@ -43,7 +150,8 @@
 
     <div class="group group-color">
       <div class="swatches" role="radiogroup" aria-label="Color">
-        <button class="swatch is-active" data-color="#1a1a1a" style="--c:#1a1a1a" role="radio" aria-checked="true" aria-label="Ink"></button>
+        <button class="swatch swatch-rainbow is-active" data-color="rainbow" role="radio" aria-checked="true" aria-label="Rainbow" title="Rainbow pencil: color changes as you draw"></button>
+        <button class="swatch" data-color="#1a1a1a" style="--c:#1a1a1a" role="radio" aria-checked="false" aria-label="Ink"></button>
         <button class="swatch" data-color="#c8321e" style="--c:#c8321e" role="radio" aria-checked="false" aria-label="Red"></button>
         <button class="swatch" data-color="#e28f16" style="--c:#e28f16" role="radio" aria-checked="false" aria-label="Amber"></button>
         <button class="swatch" data-color="#2f7d4a" style="--c:#2f7d4a" role="radio" aria-checked="false" aria-label="Green"></button>
@@ -65,8 +173,8 @@
 
     <div class="group group-slider" id="opacityGroup">
       <label class="label" for="opacityInput"><span class="label-text">Opacity</span><span class="label-max">max</span></label>
-      <input id="opacityInput" type="range" min="5" max="100" step="1" value="100" aria-label="Opacity" />
-      <output id="opacityOut" for="opacityInput">100</output>
+      <input id="opacityInput" type="range" min="5" max="100" step="1" value="70" aria-label="Opacity" />
+      <output id="opacityOut" for="opacityInput">70</output>
     </div>
 
     <div class="divider"></div>
