@@ -3,8 +3,15 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Touch Draw</title>
-  <meta name="description" content="Draw with your MacBook's Force Touch trackpad. Pressure controls size or opacity. Safari only." />
+  <title>Trackpad Draw</title>
+  <meta name="description" content="Draw on your MacBook trackpad online. Free, no install. Press harder for thicker or darker lines using the trackpad's pressure sensitivity. Works in Safari." />
+  <link rel="canonical" href="https://trackpaddraw.com/" />
+  <meta property="og:title" content="Trackpad Draw" />
+  <meta property="og:description" content="Turn your MacBook trackpad into a pressure-sensitive drawing pad. Free, online, no install." />
+  <meta property="og:url" content="https://trackpaddraw.com/" />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23f7f4ee'/%3E%3Ccircle cx='32' cy='32' r='16' fill='%231a1a1a'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -14,9 +21,11 @@
   <canvas id="canvas" aria-label="Drawing canvas"></canvas>
   <div id="cursor" class="cursor" aria-hidden="true"></div>
 
+  <h1 class="sr-only">Trackpad Draw: draw on your MacBook trackpad online, with pressure</h1>
+
   <header class="brand" aria-hidden="true">
     <span class="brand-mark"></span>
-    <span class="brand-name">Touch Draw</span>
+    <span class="brand-name">Trackpad Draw</span>
   </header>
 
   <p id="hint" class="hint">Press the trackpad to draw. Press harder for more.</p>
@@ -83,7 +92,7 @@
     <div class="gate-card">
       <div class="gate-glyph" aria-hidden="true"></div>
       <h1>Open this in Safari</h1>
-      <p>Trackpad pressure reaches the web only through Safari's Force Touch events. Chrome, Firefox and Edge report a flat click with no pressure.</p>
+      <p>Trackpad Draw reads how hard you press. Only Safari passes that pressure to web pages. Chrome, Firefox and Edge report a flat click, so lines cannot get thicker or darker as you press.</p>
       <div class="gate-actions">
         <button class="btn btn-primary" id="copyLinkBtn">Copy link</button>
         <button class="btn btn-ghost" id="continueBtn">Continue without pressure</button>

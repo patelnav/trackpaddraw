@@ -1,6 +1,8 @@
-# Touch Draw
+# Trackpad Draw
 
-Draw with your MacBook's Force Touch trackpad in Safari. Press lightly to start, press harder for more.
+**https://trackpaddraw.com**
+
+Draw on your MacBook trackpad, online, no install. Press lightly to start, press harder for more. Uses the trackpad's pressure sensitivity (Force Touch) in Safari.
 
 - **Pressure → Size**: harder press, thicker line. Opacity is fixed by the slider.
 - **Pressure → Opacity**: harder press, darker line. Size is fixed by the slider.
@@ -16,7 +18,15 @@ without pressure" fallback.
 
 ## Run
 
-No build step. Open `index.html` in Safari, or serve the folder statically (GitHub Pages works).
+No build step. Open `index.html` in Safari, or serve the folder statically.
+
+## Deploy
+
+Hosted on Cloudflare Pages, project `trackpaddraw`. Deploy the folder as-is:
+
+```bash
+CLOUDFLARE_ACCOUNT_ID=bd46952636ca619876c464e8389c274b wrangler pages deploy . --project-name trackpaddraw
+```
 
 ## Files
 

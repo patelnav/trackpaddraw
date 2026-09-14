@@ -21,7 +21,7 @@
   var clearBtn = $("clearBtn");
   var saveBtn = $("saveBtn");
 
-  var STORAGE_KEY = "touch-draw.settings";
+  var STORAGE_KEY = "trackpad-draw.settings";
   var THRESHOLD = 0.12;
 
   var settings = load({
@@ -170,7 +170,7 @@
       var a = document.createElement("a");
       var d = new Date();
       var pad = function (n) { return (n < 10 ? "0" : "") + n; };
-      a.download = "touch-draw-" + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + "-" + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds()) + ".png";
+      a.download = "trackpad-draw-" + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + "-" + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds()) + ".png";
       a.href = URL.createObjectURL(blob);
       document.body.appendChild(a);
       a.click();
