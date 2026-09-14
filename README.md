@@ -18,17 +18,17 @@ without pressure" fallback.
 
 ## Run
 
-No build step. Open `index.html` in Safari, or serve the folder statically.
+No build step. Open `public/index.html` in Safari, or serve the folder statically.
 
 ## Deploy
 
-Hosted on Cloudflare Pages, project `trackpaddraw`. Deploy the folder as-is:
+Hosted as a Cloudflare Worker with static assets (`wrangler.jsonc`). Cloudflare builds and deploys every push to `main` from GitHub. Manual deploy:
 
 ```bash
-CLOUDFLARE_ACCOUNT_ID=bd46952636ca619876c464e8389c274b wrangler pages deploy . --project-name trackpaddraw
+CLOUDFLARE_ACCOUNT_ID=bd46952636ca619876c464e8389c274b npx wrangler deploy
 ```
 
 ## Files
 
-- `index.html`, `style.css`, `ui.js` — UI shell, toolbar, Safari gate, keyboard shortcuts.
-- `engine.js` — canvas drawing engine (input, pressure, stroke rendering, undo, export). API in `ENGINE_API.md`.
+- `public/index.html`, `public/style.css`, `public/ui.js` — UI shell, toolbar, Safari gate, keyboard shortcuts.
+- `public/engine.js` — canvas drawing engine (input, pressure, stroke rendering, undo, export). API in `ENGINE_API.md`.
