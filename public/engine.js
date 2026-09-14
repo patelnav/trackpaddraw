@@ -92,12 +92,24 @@
     var ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("Canvas 2D is unavailable");
     var base = document.createElement("canvas"), baseCtx = base.getContext("2d");
+    // Scratch canvas for replayed strokes (undo fallback, resize).
     var live = document.createElement("canvas"), liveCtx = live.getContext("2d");
+    // Persistent full-size layer holding the colored pixels of the live gesture.
+    // Only the rectangle touched each frame is uploaded to it and redrawn on screen.
+    var layer = document.createElement("canvas"), layerCtx = layer.getContext("2d");
     var strokes = [], history = [], listeners = {}, bindings = [];
     var gesture = null, path = null, ema = null, lastTime = 0;
     var dpr = 1, frame = null, destroyed = false, baseDirty = true;
     var hasForce = supportsForce(), renderedCount = 0;
     var gestureMask = null, pendingMasks = [];
+    // Coverage and hue buffers are allocated once per canvas size and zeroed by
+    // rectangle after each gesture, instead of per pen-down.
+    var coverageBuffer = null, hueBuffer = null;
+    // Screen rectangles to repaint from base + layer on the next frame.
+    var screenRects = [], fullBlit = true;
+    // Undo patches: pixels of base under each committed stroke. Bumping the
+    // generation (resize) invalidates all of them.
+    var patchGeneration = 0, patchPixels = 0;
 
     function emit(name, value) {
       var callbacks = (listeners[name] || []).slice();
@@ -126,10 +138,13 @@
       var y0 = Math.max(top, Math.floor(Math.min(a.y - a.r, b.y - b.r) - 1));
       var x1 = Math.min(right, Math.ceil(Math.max(a.x + a.r, b.x + b.r) + 1));
       var y1 = Math.min(bottom, Math.ceil(Math.max(a.y + a.r, b.y + b.r) + 1));
+      if (x1 <= x0 || y1 <= y0) return;
+      if (mask.dirty) growRect(mask.dirty, x0, y0, x1, y1);
+      var opacityMode = style.mode === "opacity";
+      var ceiling = opacityMode ? Math.round(255 * Math.max(a.p, b.p)) : 255;
       for (var y = y0; y < y1; y++) {
         for (var x = x0; x < x1; x++) {
           var index = (y - top) * w + x - left;
-          var ceiling = style.mode === "opacity" ? Math.round(255 * Math.max(a.p, b.p)) : 255;
           if (coverage[index] >= ceiling) continue;
           var px = x + 0.5 - a.x, py = y + 0.5 - a.y;
           var t = 0;
@@ -142,7 +157,7 @@
           } else if (b.r > a.r || b.p > a.p) { t = 1; }
           var ex = px - dx * t, ey = py - dy * t;
           var edge = clamp(a.r + dr * t + 0.5 - Math.sqrt(ex * ex + ey * ey), 0, 1);
-          var alpha = style.mode === "opacity" ? a.p + (b.p - a.p) * t : 1;
+          var alpha = opacityMode ? a.p + (b.p - a.p) * t : 1;
           var value = Math.round(255 * edge * alpha);
           if (value > coverage[index]) {
             coverage[index] = value;
@@ -151,6 +166,81 @@
           }
         }
       }
+    }
+
+    function emptyRect() { return { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity }; }
+    function growRect(r, x0, y0, x1, y1) {
+      if (x0 < r.left) r.left = x0;
+      if (y0 < r.top) r.top = y0;
+      if (x1 > r.right) r.right = x1;
+      if (y1 > r.bottom) r.bottom = y1;
+    }
+    // Integer rectangle clipped to the canvas, or null when empty.
+    function clipRect(r) {
+      if (!r) return null;
+      var left = Math.max(0, Math.floor(r.left)), top = Math.max(0, Math.floor(r.top));
+      var right = Math.min(canvas.width, Math.ceil(r.right)), bottom = Math.min(canvas.height, Math.ceil(r.bottom));
+      return right > left && bottom > top ? { left: left, top: top, right: right, bottom: bottom } : null;
+    }
+    function boxRect(box) {
+      return clipRect({ left: box.left, top: box.top, right: box.right, bottom: box.bottom });
+    }
+    var colorProbe = null;
+    function solidRGB(color) {
+      if (!colorProbe) colorProbe = document.createElement("canvas").getContext("2d");
+      colorProbe.fillStyle = "#000000";
+      colorProbe.fillStyle = color;
+      var hex = colorProbe.fillStyle;
+      if (typeof hex === "string" && hex.charAt(0) === "#" && hex.length === 7) {
+        return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
+      }
+      return [0, 0, 0];
+    }
+    // Copy the colored coverage of one rectangle from the gesture buffers into
+    // the persistent layer canvas. Alpha is coverage; color is the hue LUT or
+    // the solid color, matching the old putImageData + source-in fill result.
+    function uploadRect(mask, r) {
+      var w = r.right - r.left, h = r.bottom - r.top;
+      var pixels = layerCtx.createImageData(w, h), data = pixels.data;
+      var coverage = mask.coverage, hues = mask.hues, rgb = mask.rgb, width = mask.width;
+      for (var y = 0; y < h; y++) {
+        var source = (r.top + y) * width + r.left, dest = y * w * 4;
+        for (var x = 0; x < w; x++, dest += 4) {
+          var value = coverage[source + x];
+          if (!value) continue;
+          if (hues) {
+            var c = rainbowRGB[hues[source + x]];
+            data[dest] = c[0]; data[dest + 1] = c[1]; data[dest + 2] = c[2];
+          } else {
+            data[dest] = rgb[0]; data[dest + 1] = rgb[1]; data[dest + 2] = rgb[2];
+          }
+          data[dest + 3] = value;
+        }
+      }
+      layerCtx.putImageData(pixels, r.left, r.top);
+    }
+    function flushMaskToLayer(mask) {
+      var r = clipRect(mask.dirty);
+      mask.dirty = emptyRect();
+      if (r) uploadRect(mask, r);
+      return r;
+    }
+    // Forget a gesture that will not be committed: clear its layer pixels and
+    // zero its buffer rows so the shared buffers stay clean for the next one.
+    function releaseMask(mask) {
+      var r = boxRect(mask.box);
+      if (!r) return;
+      layerCtx.clearRect(r.left, r.top, r.right - r.left, r.bottom - r.top);
+      if (mask.coverage === coverageBuffer) {
+        for (var y = r.top; y < r.bottom; y++) {
+          coverageBuffer.fill(0, y * mask.width + r.left, y * mask.width + r.right);
+        }
+      }
+      screenRects.push(r);
+    }
+    function discardPending() {
+      for (var i = 0; i < pendingMasks.length; i++) releaseMask(pendingMasks[i].mask);
+      pendingMasks = [];
     }
 
     function renderStroke(target, stroke) {
@@ -226,11 +316,18 @@
     }
 
     function newGestureMask() {
+      var size = canvas.width * canvas.height;
+      if (!coverageBuffer || coverageBuffer.length !== size) coverageBuffer = new Uint8ClampedArray(size);
+      var rainbow = gesture.style.color === "rainbow";
+      // Hues are only read where coverage is non-zero, and every coverage write
+      // also writes the hue, so stale hues from earlier strokes are harmless.
+      if (rainbow && (!hueBuffer || hueBuffer.length !== size)) hueBuffer = new Uint16Array(size);
       return { left: 0, top: 0, width: canvas.width, height: canvas.height,
-        coverage: new Uint8ClampedArray(canvas.width * canvas.height),
-        hues: gesture.style.color === "rainbow" ? new Uint16Array(canvas.width * canvas.height) : null,
+        coverage: coverageBuffer, hues: rainbow ? hueBuffer : null,
+        rgb: rainbow ? null : solidRGB(gesture.style.color),
         distance: 0,
         box: { left: canvas.width, top: canvas.height, right: 0, bottom: 0 },
+        dirty: emptyRect(),
         pathIndex: 0, state: null, tail: null };
     }
     function devicePoint(point, style) {
@@ -277,6 +374,7 @@
     function restoreTail(mask) {
       var tail = mask.tail;
       if (!tail) return;
+      if (mask.dirty) growRect(mask.dirty, tail.left, tail.top, tail.left + tail.width, tail.top + tail.height);
       for (var y = 0; y < tail.height; y++) {
         mask.coverage.set(tail.pixels.subarray(y * tail.width, (y + 1) * tail.width),
           (tail.top + y) * mask.width + tail.left);
@@ -347,6 +445,47 @@
       }
     }
 
+    // Save the base pixels under a stroke so undo can paste them back.
+    function savePatch(stroke, r) {
+      var w = r.right - r.left, h = r.bottom - r.top;
+      var patch = document.createElement("canvas");
+      patch.width = w; patch.height = h;
+      patch.getContext("2d").drawImage(base, r.left, r.top, w, h, 0, 0, w, h);
+      stroke.patch = { canvas: patch, left: r.left, top: r.top, generation: patchGeneration };
+      patchPixels += w * h;
+      // Bound memory to a few canvases' worth; drop the oldest patches first.
+      var limit = canvas.width * canvas.height * 4;
+      for (var i = 0; patchPixels > limit && i < strokes.length; i++) dropPatch(strokes[i]);
+    }
+    function dropPatch(stroke) {
+      if (!stroke || !stroke.patch) return;
+      patchPixels -= stroke.patch.canvas.width * stroke.patch.canvas.height;
+      stroke.patch.canvas.width = stroke.patch.canvas.height = 0;
+      stroke.patch = null;
+    }
+    function commitMask(mask, stroke) {
+      updateGestureMask(mask, stroke);
+      flushMaskToLayer(mask);
+      var r = boxRect(mask.box);
+      if (!r) return;
+      var w = r.right - r.left, h = r.bottom - r.top;
+      savePatch(stroke, r);
+      baseCtx.save();
+      baseCtx.globalAlpha = stroke.style.opacity;
+      baseCtx.drawImage(layer, r.left, r.top, w, h, r.left, r.top, w, h);
+      baseCtx.restore();
+      releaseMask(mask);
+    }
+    function blit(r) {
+      var w = r.right - r.left, h = r.bottom - r.top;
+      ctx.drawImage(base, r.left, r.top, w, h, r.left, r.top, w, h);
+      if (gesture && gestureMask) {
+        ctx.save();
+        ctx.globalAlpha = gesture.style.opacity;
+        ctx.drawImage(layer, r.left, r.top, w, h, r.left, r.top, w, h);
+        ctx.restore();
+      }
+    }
     function render() {
       if (destroyed) return;
       if (baseDirty) {
@@ -355,6 +494,7 @@
         baseCtx.fillRect(0, 0, base.width, base.height);
         renderedCount = 0;
         baseDirty = false;
+        fullBlit = true;
       }
       for (; renderedCount < strokes.length; renderedCount++) {
         var stroke = strokes[renderedCount], cached = null;
@@ -364,17 +504,29 @@
             break;
           }
         }
-        if (cached) {
-          updateGestureMask(cached, stroke);
-          composite(baseCtx, cached, stroke.style);
-        } else { renderStroke(baseCtx, stroke); }
+        if (cached) commitMask(cached, stroke);
+        else { dropPatch(stroke); renderStroke(baseCtx, stroke); fullBlit = true; }
       }
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(base, 0, 0);
-      if (gesture) {
+      if (gesture && gestureMask) {
         updateGestureMask(gestureMask, gesture);
-        composite(ctx, gestureMask, gesture.style);
+        var dirty = flushMaskToLayer(gestureMask);
+        if (dirty) screenRects.push(dirty);
       }
+      if (fullBlit) {
+        ctx.drawImage(base, 0, 0);
+        var box = gesture && gestureMask ? boxRect(gestureMask.box) : null;
+        if (box) {
+          ctx.save();
+          ctx.globalAlpha = gesture.style.opacity;
+          ctx.drawImage(layer, box.left, box.top, box.right - box.left, box.bottom - box.top,
+            box.left, box.top, box.right - box.left, box.bottom - box.top);
+          ctx.restore();
+        }
+        fullBlit = false;
+      } else {
+        for (var k = 0; k < screenRects.length; k++) blit(screenRects[k]);
+      }
+      screenRects = [];
     }
     function flush() {
       if (frame !== null) { window.cancelAnimationFrame(frame); frame = null; }
@@ -388,7 +540,11 @@
       canvas.style.width = window.innerWidth + "px";
       canvas.style.height = window.innerHeight + "px";
       base.width = canvas.width; base.height = canvas.height;
-      pendingMasks = [];
+      layer.width = canvas.width; layer.height = canvas.height;
+      coverageBuffer = null; hueBuffer = null;
+      pendingMasks = []; screenRects = [];
+      patchGeneration++;
+      for (var i = 0; i < strokes.length; i++) dropPatch(strokes[i]);
       if (gesture) gestureMask = newGestureMask();
       baseDirty = true;
       schedule();
@@ -458,6 +614,7 @@
       if (e.button !== 0 || destroyed) return;
       e.preventDefault();
       if (gesture) finish();
+      if (pendingMasks.length) flush();
       gesture = { style: copy(opts), paths: [] };
       if (gesture.style.color === "rainbow") gesture.style.hueStart = rainbowHue;
       gestureMask = newGestureMask();
@@ -497,9 +654,17 @@
       clear: function () {
         if (destroyed) return;
         if (gesture) finish();
-        history.push({ type: "clear", strokes: strokes });
+        discardPending();
+        flush();
+        // Keep a copy of the whole drawing so undoing a clear is one paste.
+        var snapshot = document.createElement("canvas");
+        snapshot.width = base.width; snapshot.height = base.height;
+        snapshot.getContext("2d").drawImage(base, 0, 0);
+        for (var i = 0; i < history.length; i++) {
+          if (history[i].snapshot) { history[i].snapshot.width = history[i].snapshot.height = 0; history[i].snapshot = null; }
+        }
+        history.push({ type: "clear", strokes: strokes, snapshot: snapshot, generation: patchGeneration });
         strokes = [];
-        pendingMasks = [];
         baseDirty = true; schedule(); emit("change");
       },
       undo: function () {
@@ -507,10 +672,35 @@
         if (gesture) finish();
         var entry = history.pop();
         if (!entry) return false;
-        if (entry.type === "clear") strokes = entry.strokes;
-        else strokes.pop();
-        pendingMasks = [];
-        baseDirty = true; schedule(); emit("change");
+        if (entry.type === "clear") {
+          strokes = entry.strokes;
+          if (entry.snapshot && entry.generation === patchGeneration && !baseDirty) {
+            baseCtx.drawImage(entry.snapshot, 0, 0);
+            renderedCount = strokes.length;
+            fullBlit = true;
+          } else { baseDirty = true; }
+          if (entry.snapshot) { entry.snapshot.width = entry.snapshot.height = 0; entry.snapshot = null; }
+        } else {
+          var stroke = strokes.pop();
+          if (strokes.length >= renderedCount) {
+            // Never reached base: just forget its pending layer pixels.
+            for (var i = 0; i < pendingMasks.length; i++) {
+              if (pendingMasks[i].stroke === stroke) { releaseMask(pendingMasks[i].mask); pendingMasks.splice(i, 1); break; }
+            }
+            renderedCount = Math.min(renderedCount, strokes.length);
+          } else if (stroke.patch && stroke.patch.generation === patchGeneration && !baseDirty) {
+            var patch = stroke.patch;
+            baseCtx.drawImage(patch.canvas, patch.left, patch.top);
+            screenRects.push({ left: patch.left, top: patch.top,
+              right: patch.left + patch.canvas.width, bottom: patch.top + patch.canvas.height });
+            renderedCount = strokes.length;
+          } else {
+            discardPending();
+            baseDirty = true;
+          }
+          dropPatch(stroke);
+        }
+        schedule(); emit("change");
         return true;
       },
       canUndo: function () { return history.length > 0; },
@@ -535,7 +725,8 @@
         }
         bindings = []; listeners = {}; strokes = []; history = [];
         gestureMask = null; pendingMasks = [];
-        base.width = base.height = live.width = live.height = 1;
+        base.width = base.height = live.width = live.height = layer.width = layer.height = 1;
+        coverageBuffer = hueBuffer = null;
       }
     };
   }
