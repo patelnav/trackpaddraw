@@ -15,7 +15,7 @@ window.TouchDrawEngine.create(canvas, options) -> engine
   opacity: 1,            // 0..1. In 'opacity' mode = max alpha; in 'size' mode = fixed alpha
   threshold: 0.12,       // normalized pressure (0..1) needed to start a stroke (UI passes 0.08)
   background: '#f7f4ee', // paper color, baked into export
-  forceMax: 3,           // raw webkitForce treated as full pressure (1.2..4); set by calibration
+  forceMax: 3,           // raw webkitForce treated as full pressure (1.2..4); ui.js adapts it per person via calibrate.js
 }
 ```
 
@@ -35,7 +35,7 @@ engine.destroy()
 
 Events (`engine.on`):
 - `'pressure'` → `(p)` normalized 0..1 pressure (webkitForce 0.85..3 mapped onto 0..1 with a 0.8 exponent, so a plain click ≈ 0.12, a force click ≈ 0.6, and the deepest press = 1), fired on every force change (also 0 on release). UI uses this for the live meter.
-- `'force'` → `(raw)` raw `webkitForce` on every mousedown/mousemove/forcechanged (Safari only). Used by the calibration panel.
+- `'force'` → `(raw)` raw `webkitForce` on every mousedown/mousemove/forcechanged (Safari only). ui.js uses it to learn each person's pressure range (calibrate.js) and for the ?debug readout.
 - `'strokestart'` → `()`
 - `'strokeend'` → `()`
 - `'change'` → `()` after clear/undo/strokeend so UI can refresh button states.

@@ -29,15 +29,16 @@
     color: "rainbow",
     size: 24,
     opacity: 0.7,
-    forceMax: 3,
   });
+  var FORCE_KEY = "trackpad-draw.force";
+  var forceState = loadForce();
 
   var engine = TouchDrawEngine.create(canvas, {
     mode: settings.mode,
     color: settings.color,
     size: settings.size,
     opacity: settings.opacity,
-    forceMax: settings.forceMax,
+    forceMax: forceState.forceMax,
     threshold: THRESHOLD,
     background: getComputedStyle(document.documentElement).getPropertyValue("--paper").trim() || "#f7f4ee",
   });
@@ -193,24 +194,33 @@
   $("helpClose").addEventListener("click", function () { toggleHelp(false); });
   help.addEventListener("click", function (e) { if (e.target === help) toggleHelp(false); });
 
-  // ---- Force calibration ---------------------------------------------------
+  // ---- Automatic force calibration ------------------------------------------
+  // Track the hardest press in each stroke; after the stroke, let the
+  // calibration module move the full-pressure point. Never changes mid-stroke.
+  var strokePeak = 0, inStroke = false;
+  engine.on("strokestart", function () { inStroke = true; strokePeak = 0; });
+  engine.on("force", function (raw) { if (inStroke && raw > strokePeak) strokePeak = raw; });
+  engine.on("strokeend", function () {
+    inStroke = false;
+    forceState = TouchDrawCalibration.afterStroke(forceState, strokePeak);
+    engine.set({ forceMax: forceState.forceMax });
+    saveForce();
+    showForceMax();
+  });
+
+  // ---- Force readout (F key or ?debug) ----------------------------------------
   var calib = $("calib");
   var SCALE = 3.5, peak = 0;
   var calibRaw = $("calibRaw"), calibNorm = $("calibNorm"), calibPeak = $("calibPeak");
   var calibFill = $("calibFill"), calibPeakMark = $("calibPeakMark"), calibMaxMark = $("calibMaxMark");
-  var calibStatus = $("calibStatus");
   function showForceMax() {
-    calibMaxMark.style.left = Math.min(100, settings.forceMax / SCALE * 100) + "%";
-    calibMaxMark.firstChild.textContent = "full " + settings.forceMax.toFixed(2);
+    calibMaxMark.style.left = Math.min(100, forceState.forceMax / SCALE * 100) + "%";
+    calibMaxMark.firstChild.textContent = "full " + forceState.forceMax.toFixed(2);
   }
   function setPeak(v) {
     peak = v;
     calibPeak.value = v.toFixed(2);
     calibPeakMark.style.left = Math.min(100, v / SCALE * 100) + "%";
-  }
-  function toggleCalib(force) {
-    var show = typeof force === "boolean" ? force : calib.hidden;
-    calib.hidden = !show;
   }
   engine.on("force", function (raw) {
     if (calib.hidden) return;
@@ -221,22 +231,17 @@
   engine.on("pressure", function (p) {
     if (!calib.hidden) calibNorm.value = Math.round(p * 100) + "%";
   });
-  $("calibClose").addEventListener("click", function () { toggleCalib(false); });
-  $("calibResetPeak").addEventListener("click", function () { setPeak(0); calibStatus.textContent = ""; });
-  $("calibSave").addEventListener("click", function () {
-    if (peak < 1.2) { calibStatus.textContent = "Press harder first. Peak must be above 1.20."; return; }
-    settings.forceMax = Math.min(4, peak);
-    engine.set({ forceMax: settings.forceMax });
-    save(); showForceMax();
-    calibStatus.textContent = "Saved. Full pressure is now " + settings.forceMax.toFixed(2) + ".";
+  $("calibClose").addEventListener("click", function () { calib.hidden = true; });
+  $("calibResetPeak").addEventListener("click", function () { setPeak(0); });
+  $("calibForget").addEventListener("click", function () {
+    forceState = { forceMax: TouchDrawCalibration.DEFAULT_MAX, peaks: [] };
+    engine.set({ forceMax: forceState.forceMax });
+    saveForce(); showForceMax();
   });
-  $("calibDefault").addEventListener("click", function () {
-    settings.forceMax = 3;
-    engine.set({ forceMax: 3 });
-    save(); showForceMax();
-    calibStatus.textContent = "Reset to the default of 3.00.";
-  });
-  if (/[?&]calibrate\b/.test(location.search)) toggleCalib(true);
+  function toggleCalib(force) {
+    calib.hidden = typeof force === "boolean" ? !force : !calib.hidden;
+  }
+  if (/[?&]debug\b/.test(location.search)) toggleCalib(true);
 
   // ---- Keyboard ------------------------------------------------------------
   document.addEventListener("keydown", function (e) {
@@ -279,6 +284,17 @@
       for (var k in defaults) out[k] = parsed[k] != null ? parsed[k] : defaults[k];
       return out;
     } catch (err) { return defaults; }
+  }
+  function loadForce() {
+    var fallback = { forceMax: TouchDrawCalibration.DEFAULT_MAX, peaks: [] };
+    try {
+      var parsed = JSON.parse(localStorage.getItem(FORCE_KEY) || "null");
+      if (parsed && typeof parsed.forceMax === "number" && Array.isArray(parsed.peaks)) return parsed;
+    } catch (err) { /* ignore */ }
+    return fallback;
+  }
+  function saveForce() {
+    try { localStorage.setItem(FORCE_KEY, JSON.stringify(forceState)); } catch (err) { /* ignore */ }
   }
   function save() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)); } catch (err) { /* ignore */ }

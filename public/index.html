@@ -96,9 +96,9 @@
 
   <button id="helpBtn" class="help-btn" aria-expanded="false" aria-controls="help" title="About Trackpad Draw (?)">?</button>
 
-  <aside id="calib" class="calib" hidden aria-label="Force calibration">
+  <aside id="calib" class="calib" hidden aria-label="Force readout">
     <div class="calib-head">
-      <span class="calib-title">Force calibration</span>
+      <span class="calib-title">Force</span>
       <button id="calibClose" class="calib-close" aria-label="Close">×</button>
     </div>
     <div class="calib-row"><span>Raw force</span><output id="calibRaw">0.00</output></div>
@@ -111,13 +111,11 @@
       <div class="calib-mark" style="left: calc(2 / 3.5 * 100%)"><span>force click</span></div>
       <div class="calib-mark calib-max" id="calibMaxMark"><span>full</span></div>
     </div>
-    <p class="calib-note">Press as hard as you comfortably draw. Then save your peak as full pressure.</p>
+    <p class="calib-note">Full pressure adapts to your hardest recent presses.</p>
     <div class="calib-actions">
-      <button class="btn btn-primary" id="calibSave">Use peak as full</button>
       <button class="btn" id="calibResetPeak">Reset peak</button>
-      <button class="btn btn-ghost" id="calibDefault">Default</button>
+      <button class="btn btn-ghost" id="calibForget">Forget learned range</button>
     </div>
-    <p class="calib-fine" id="calibStatus"></p>
   </aside>
 
   <aside id="help" class="help" hidden>
@@ -155,7 +153,7 @@
         <li><kbd>1</kbd> <kbd>2</kbd> Pressure controls size or opacity</li>
         <li><kbd>[</kbd> <kbd>]</kbd> Brush size</li>
         <li><kbd>-</kbd> <kbd>=</kbd> Opacity</li>
-        <li><kbd>F</kbd> Force calibration: see raw pressure and set your full-pressure point</li>
+        <li><kbd>F</kbd> Show what the trackpad is sensing</li>
         <li><kbd>?</kbd> This panel</li>
       </ul>
       <p class="help-fine">Made with a Force Touch trackpad. <a href="https://github.com/patelnav/trackpaddraw">Source on GitHub</a>.</p>
@@ -235,6 +233,7 @@
   </div>
 
   <script src="engine.js"></script>
+  <script src="calibrate.js"></script>
   <script src="ui.js"></script>
 </body>
 </html>
