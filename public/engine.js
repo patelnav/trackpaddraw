@@ -74,7 +74,7 @@
 
   function create(canvas, options) {
     var opts = { mode: "size", color: "#1a1a1a", size: 24, opacity: 1,
-      threshold: 0.12, background: "#f7f4ee" };
+      threshold: 0.12, background: "#f7f4ee", forceMax: 3 };
     function set(partial) {
       if (!partial) return;
       if (partial.mode === "size" || partial.mode === "opacity") opts.mode = partial.mode;
@@ -85,6 +85,10 @@
         if (typeof v === "number" && isFinite(v)) {
           opts[k] = k === "size" ? Math.max(0.1, v) : clamp(v, 0, 1);
         }
+      }
+      // Raw webkitForce that maps to full pressure (calibration).
+      if (typeof partial.forceMax === "number" && isFinite(partial.forceMax)) {
+        opts.forceMax = clamp(partial.forceMax, 1.2, 4);
       }
     }
     set(options);
@@ -553,13 +557,13 @@
       if (!hasForce) return gesture || (e.buttons & 1) ||
         (e.type === "mousedown" && e.button === 0) ? 0.5 : 0;
       var force = e.webkitForce;
-      // Safari: plain click = 1 (WEBKIT_FORCE_AT_MOUSE_DOWN), force click = 2.
-      // Most presses stay between 1 and 2, so that span is the whole range:
-      // plain click ~0.15, force click = 1. The 0.6 exponent makes light
-      // extra pressure respond quickly instead of needing a hard push.
+      // Safari: plain click = 1 (WEBKIT_FORCE_AT_MOUSE_DOWN), force click = 2,
+      // and pressing past the force click keeps rising. forceMax (default 3,
+      // user-calibrated) is full pressure: plain click ~0.12, force click ~0.6.
+      // The 0.8 exponent keeps light presses responsive.
       if (typeof force !== "number" || !isFinite(force)) return 0;
-      var linear = clamp((force - 0.85) / 1.15, 0, 1);
-      return Math.pow(linear, 0.6);
+      var linear = clamp((force - 0.85) / (opts.forceMax - 0.85), 0, 1);
+      return Math.pow(linear, 0.8);
     }
     function sample(e, p) {
       if (!gesture) return;
@@ -609,7 +613,11 @@
       emit("strokeend");
       emit("change");
     }
+    function emitForce(e) {
+      if (hasForce && typeof e.webkitForce === "number") emit("force", e.webkitForce);
+    }
     function onDown(e) {
+      emitForce(e);
       emit("pressure", pressureOf(e));
       if (e.button !== 0 || destroyed) return;
       e.preventDefault();
@@ -624,6 +632,7 @@
     function onInput(e) {
       var lost = gesture && typeof e.buttons === "number" && !(e.buttons & 1);
       var p = lost && !hasForce ? 0 : pressureOf(e);
+      if (!lost) emitForce(e);
       emit("pressure", p);
       if (lost) { finish(); return; }
       if (gesture) { e.preventDefault(); sample(e, p); }

@@ -513,3 +513,38 @@ body.is-drawing .help-btn { opacity: 0.35; }
 }
 .help-fine { margin-top: 20px !important; font-size: 12px; color: var(--ink-3); }
 .help a { color: var(--ink); }
+
+/* Force calibration */
+.calib[hidden] { display: none; }
+.calib {
+  position: fixed;
+  top: 56px;
+  right: 16px;
+  z-index: 8;
+  width: 310px;
+  padding: 14px 16px 12px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  box-shadow: var(--panel-shadow);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  backdrop-filter: blur(14px) saturate(1.2);
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.calib-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.calib-title { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink); }
+.calib-close { border: 0; background: transparent; color: var(--ink-3); font-size: 18px; line-height: 1; cursor: pointer; padding: 2px 4px; }
+.calib-row { display: flex; justify-content: space-between; padding: 2px 0; }
+.calib-row output { font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 500; }
+.calib-scale { position: relative; height: 8px; margin: 26px 0 22px; border-radius: 4px; background: rgba(26, 26, 26, 0.08); }
+.calib-fill { position: absolute; inset: 0; border-radius: 4px; background: var(--ink); transform-origin: left center; transform: scaleX(0); }
+.calib-peak { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: #c8321e; left: 0; }
+.calib-mark { position: absolute; top: -3px; bottom: -3px; width: 1px; background: var(--ink-3); }
+.calib-mark span { position: absolute; top: 13px; left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: 10px; color: var(--ink-3); }
+.calib-max { background: #2457b8; }
+.calib-max span { top: auto; bottom: 13px; color: #2457b8; font-weight: 600; }
+.calib-note { margin: 0 0 10px; line-height: 1.45; }
+.calib-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.calib-actions .btn { padding: 5px 9px; }
+.calib-fine { min-height: 1em; margin: 8px 0 0; font-size: 11px; color: var(--ink-3); }

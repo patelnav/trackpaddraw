@@ -22,13 +22,14 @@
   var saveBtn = $("saveBtn");
 
   var STORAGE_KEY = "trackpad-draw.settings.v2";
-  var THRESHOLD = 0.12;
+  var THRESHOLD = 0.08;
 
   var settings = load({
     mode: "size",
     color: "rainbow",
     size: 24,
     opacity: 0.7,
+    forceMax: 3,
   });
 
   var engine = TouchDrawEngine.create(canvas, {
@@ -36,6 +37,7 @@
     color: settings.color,
     size: settings.size,
     opacity: settings.opacity,
+    forceMax: settings.forceMax,
     threshold: THRESHOLD,
     background: getComputedStyle(document.documentElement).getPropertyValue("--paper").trim() || "#f7f4ee",
   });
@@ -191,6 +193,51 @@
   $("helpClose").addEventListener("click", function () { toggleHelp(false); });
   help.addEventListener("click", function (e) { if (e.target === help) toggleHelp(false); });
 
+  // ---- Force calibration ---------------------------------------------------
+  var calib = $("calib");
+  var SCALE = 3.5, peak = 0;
+  var calibRaw = $("calibRaw"), calibNorm = $("calibNorm"), calibPeak = $("calibPeak");
+  var calibFill = $("calibFill"), calibPeakMark = $("calibPeakMark"), calibMaxMark = $("calibMaxMark");
+  var calibStatus = $("calibStatus");
+  function showForceMax() {
+    calibMaxMark.style.left = Math.min(100, settings.forceMax / SCALE * 100) + "%";
+    calibMaxMark.firstChild.textContent = "full " + settings.forceMax.toFixed(2);
+  }
+  function setPeak(v) {
+    peak = v;
+    calibPeak.value = v.toFixed(2);
+    calibPeakMark.style.left = Math.min(100, v / SCALE * 100) + "%";
+  }
+  function toggleCalib(force) {
+    var show = typeof force === "boolean" ? force : calib.hidden;
+    calib.hidden = !show;
+  }
+  engine.on("force", function (raw) {
+    if (calib.hidden) return;
+    calibRaw.value = raw.toFixed(2);
+    calibFill.style.transform = "scaleX(" + Math.min(1, raw / SCALE).toFixed(3) + ")";
+    if (raw > peak) setPeak(raw);
+  });
+  engine.on("pressure", function (p) {
+    if (!calib.hidden) calibNorm.value = Math.round(p * 100) + "%";
+  });
+  $("calibClose").addEventListener("click", function () { toggleCalib(false); });
+  $("calibResetPeak").addEventListener("click", function () { setPeak(0); calibStatus.textContent = ""; });
+  $("calibSave").addEventListener("click", function () {
+    if (peak < 1.2) { calibStatus.textContent = "Press harder first. Peak must be above 1.20."; return; }
+    settings.forceMax = Math.min(4, peak);
+    engine.set({ forceMax: settings.forceMax });
+    save(); showForceMax();
+    calibStatus.textContent = "Saved. Full pressure is now " + settings.forceMax.toFixed(2) + ".";
+  });
+  $("calibDefault").addEventListener("click", function () {
+    settings.forceMax = 3;
+    engine.set({ forceMax: 3 });
+    save(); showForceMax();
+    calibStatus.textContent = "Reset to the default of 3.00.";
+  });
+  if (/[?&]calibrate\b/.test(location.search)) toggleCalib(true);
+
   // ---- Keyboard ------------------------------------------------------------
   document.addEventListener("keydown", function (e) {
     var meta = e.metaKey || e.ctrlKey;
@@ -201,6 +248,8 @@
     if (meta) return;
     if (e.key === "Escape" && !help.hidden) { toggleHelp(false); e.preventDefault(); return; }
     if (e.key === "?") { toggleHelp(); e.preventDefault(); return; }
+    if (e.key === "f" || e.key === "F") { toggleCalib(); e.preventDefault(); return; }
+    if (e.key === "Escape" && !calib.hidden) { toggleCalib(false); e.preventDefault(); return; }
     switch (e.key) {
       case "1": setMode("size"); break;
       case "2": setMode("opacity"); break;
@@ -237,6 +286,7 @@
 
   // ---- Init ----------------------------------------------------------------
   meterTick.style.left = Math.round(THRESHOLD * 100) + "%";
+  showForceMax();
   setMode(settings.mode);
   setColor(settings.color, false);
   setSize(settings.size);

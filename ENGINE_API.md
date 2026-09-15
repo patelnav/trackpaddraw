@@ -13,8 +13,9 @@ window.TouchDrawEngine.create(canvas, options) -> engine
   color: '#1a1a1a',    // hex, or the string 'rainbow': hue advances 0.6° per CSS px of travel, hsl(h 85% 55%), continuing across strokes
   size: 24,              // px at DPR 1. In 'size' mode = max width; in 'opacity' mode = fixed width
   opacity: 1,            // 0..1. In 'opacity' mode = max alpha; in 'size' mode = fixed alpha
-  threshold: 0.12,       // normalized pressure (0..1) needed to start a stroke
+  threshold: 0.12,       // normalized pressure (0..1) needed to start a stroke (UI passes 0.08)
   background: '#f7f4ee', // paper color, baked into export
+  forceMax: 3,           // raw webkitForce treated as full pressure (1.2..4); set by calibration
 }
 ```
 
@@ -33,7 +34,8 @@ engine.destroy()
 ```
 
 Events (`engine.on`):
-- `'pressure'` → `(p)` normalized 0..1 pressure (webkitForce 0.85..2 mapped onto 0..1 with a 0.6 exponent, so a plain click ≈ 0.3 and a force click = 1), fired on every force change (also 0 on release). UI uses this for the live meter.
+- `'pressure'` → `(p)` normalized 0..1 pressure (webkitForce 0.85..3 mapped onto 0..1 with a 0.8 exponent, so a plain click ≈ 0.12, a force click ≈ 0.6, and the deepest press = 1), fired on every force change (also 0 on release). UI uses this for the live meter.
+- `'force'` → `(raw)` raw `webkitForce` on every mousedown/mousemove/forcechanged (Safari only). Used by the calibration panel.
 - `'strokestart'` → `()`
 - `'strokeend'` → `()`
 - `'change'` → `()` after clear/undo/strokeend so UI can refresh button states.
